@@ -5,7 +5,6 @@ This repository documents the procedure for validating bidirectional user-plane 
 ## Prerequisites
 
 - OAI source tree checked out under `~/openairinterface5g/`
-- Virtual machine or host environment provisioned with **2 CPU cores** and **8 GB RAM**
 - Build artifacts located at `~/openairinterface5g/cmake_targets/ran_build/build/`
 - Ability to run commands with `sudo`
 - High-efficiency execution flags enabled: `-E` and `--parallel-config PARALLEL_SINGLE_THREAD`
