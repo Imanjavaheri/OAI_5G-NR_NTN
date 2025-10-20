@@ -1,112 +1,59 @@
-# 5G NR NTN LEO Simulation with Netcat (noS1 Mode)
+# Implementing OAI 5G NR NTN LEO Simulation
 
-This repository documents the procedure for validating bidirectional user-plane connectivity over a simulated 5G Non-Terrestrial Network (NTN) Low Earth Orbit (LEO) link using the OpenAirInterface (OAI) RF simulator. The workflow leverages the lightweight `netcat` (`nc`) utility to exchange custom text messages between a gNB and a UE operating in **noS1** mode.
+This guide walks through configuring and running a Standalone (SA) 5G New Radio Non-Terrestrial Network (NR NTN) Low Earth Orbit (LEO) simulation with OpenAirInterface (OAI) softmodems and the integrated RFsimulator.
 
-## Prerequisites
+## 1. Prerequisites and Setup 🧭
 
-- OAI source tree checked out under `~/openairinterface5g/`
-- Build artifacts located at `~/openairinterface5g/cmake_targets/ran_build/build/`
-- Ability to run commands with `sudo`
-- High-efficiency execution flags enabled: `-E` and `--parallel-config PARALLEL_SINGLE_THREAD`
+These instructions assume the OAI source tree is already built and located in `~/openairinterface5g/`.
 
-## Step-by-Step Procedure
+1. **Locate the build directory**
+   ```bash
+   cd ~/openairinterface5g/cmake_targets/ran_build/build/
+   ```
+2. **Verify configuration file availability**
+   - gNB config: `../../../ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf`
+   - UE config: `../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf`
 
-### 1. Navigate to the Build Directory
+## 2. Launch the gNB (LEO Ground Station) 🛰️
 
-```bash
-cd ~/openairinterface5g/cmake_targets/ran_build/build/
-```
-
-### 2. Launch the gNB (Terminal 1)
-
-Start the gNB with RF simulator support and **noS1** mode enabled. This creates the `oaitun_enb1` tunnel interface (IP address `10.0.1.1`).
+Run the gNB softmodem as the RFsimulator server with the LEO-specific configuration.
 
 ```bash
-sudo ./nr-softmodem \
+# Terminal 1 (gNB)
+sudo -E ./nr-softmodem \
   -O ../../../ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf \
-  --rfsim \
-  --rfsimulator.options chanmod \
-  --noS1 \
-  -E \
-  --parallel-config PARALLEL_SINGLE_THREAD
+  --rfsim
 ```
 
-### 3. Launch the NR UE (Terminal 2)
+Keep this terminal open after confirming initialization logs (including orbit data).
 
-In a separate terminal, start the NR UE. This creates the `oaitun_ue1` tunnel interface (IP address `10.0.1.2`) and applies Doppler and timing compensation suitable for an NTN LEO scenario.
+## 3. Launch the NR UE (User Equipment) 📱
+
+Start the UE softmodem in a separate terminal so it can act as the RFsimulator client and apply the required LEO compensations.
 
 ```bash
-sudo ./nr-uesoftmodem \
+# Terminal 2 (UE)
+sudo -E ./nr-uesoftmodem \
   -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf \
-  --band 254 \
-  -C 2488400000 \
-  --CO -873500000 \
-  -r 25 \
-  --numerology 0 \
-  --ssb 60 \
-  --rfsim \
-  --rfsimulator.prop_delay 20 \
-  --rfsimulator.options chanmod \
+  --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 \
+  --rfsim --rfsimulator.prop_delay 20 --rfsimulator.options chanmod \
   --time-sync-I 0.1 \
   --ntn-initial-time-drift -46 \
   --autonomous-ta \
   --initial-fo 57340 \
-  --cont-fo-comp 2 \
-  --noS1 \
-  -E \
-  --parallel-config PARALLEL_SINGLE_THREAD
+  --cont-fo-comp 2
 ```
 
-Monitor both terminals for the RRC Connection Setup messages to confirm that the UE has successfully attached to the gNB.
+### Key UE Command-Line Parameters
 
-### 4. Downlink Messaging (gNB → UE)
+| Option | Purpose in LEO simulation |
+| ------ | ------------------------- |
+| `--rfsimulator.prop_delay 20` | Sets the channel model propagation delay (e.g., 20 ms). |
+| `--rfsimulator.options chanmod` | Activates the LEO channel model. |
+| `--cont-fo-comp 2` | Enables continuous Doppler-focused frequency offset compensation. |
+| `--initial-fo 57340` | Applies the known initial Doppler frequency offset for synchronization. |
+| `--ntn-initial-time-drift -46` | Configures the initial downlink time drift (µs/s) before SIB19 reception. |
+| `--autonomous-ta` | Allows autonomous Timing Advance updates driven by downlink drift. |
 
-#### a. UE Listener (Terminal 4)
+With both processes running, the UE should synchronize to the gNB using LEO-specific compensations.
 
-Open a listener on the UE tunnel interface (`10.0.1.2`) using port `6000`.
-
-```bash
-nc -l 10.0.1.2 6000
-```
-
-#### b. gNB Sender (Terminal 3)
-
-Connect from the gNB tunnel interface to the UE listener and send a message.
-
-```bash
-nc 10.0.1.2 6000
-```
-
-Type a message, for example:
-
-```
-Hello LEO, message from gNB!
-```
-
-The message should immediately appear in the UE listener terminal. Use `Ctrl+C` in both terminals to end the session.
-
-### 5. Uplink Messaging (UE → gNB)
-
-#### a. gNB Listener (Terminal 3)
-
-```bash
-nc -l 10.0.1.1 6001
-```
-
-#### b. UE Sender (Terminal 4)
-
-```bash
-nc 10.0.1.1 6001
-```
-
-Send a reply such as:
-
-```
-Reply received! Sending uplink data from UE.
-```
-
-The message should appear in the gNB terminal. Press `Ctrl+C` in both terminals to close the session.
-
-## Outcome
-
-Completing the steps above validates bidirectional custom text transmission over the simulated 5G NTN LEO link in noS1 mode using OAI's RF simulator and the `netcat` utility.
